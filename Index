@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>カスタム振動テスト</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      background-color: #f5f5f7;
+      color: #1d1d1f;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    .card {
+      background: white;
+      padding: 24px;
+      border-radius: 20px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+      width: 100%;
+      max-width: 360px;
+    }
+    h1 {
+      font-size: 1.3rem;
+      margin: 0 0 20px 0;
+      text-align: center;
+    }
+    .control-group {
+      margin-bottom: 20px;
+    }
+    .label-row {
+      display: flex;
+      justify-content: space-between;
+      font-weight: bold;
+      font-size: 0.95rem;
+      margin-bottom: 8px;
+    }
+    .value-badge {
+      color: #007aff;
+    }
+    input[type="range"] {
+      width: 100%;
+      accent-color: #007aff;
+      cursor: pointer;
+    }
+    .btn {
+      width: 100%;
+      padding: 16px;
+      font-size: 1.05rem;
+      font-weight: bold;
+      border: none;
+      border-radius: 14px;
+      color: white;
+      cursor: pointer;
+      transition: transform 0.1s, opacity 0.2s;
+      -webkit-tap-highlight-color: transparent;
+      margin-bottom: 12px;
+    }
+    .btn:active {
+      transform: scale(0.97);
+    }
+    .btn-primary {
+      background-color: #007aff;
+      box-shadow: 0 4px 12px rgba(0, 122, 255, 0.25);
+    }
+    .btn-tiktok {
+      background-color: #fe2c55;
+      box-shadow: 0 4px 12px rgba(254, 44, 85, 0.25);
+    }
+    .btn-stop {
+      background-color: #8e8e93;
+      padding: 12px;
+      font-size: 0.9rem;
+      margin-bottom: 0;
+    }
+    #status {
+      margin-top: 16px;
+      font-size: 0.8rem;
+      color: #86868b;
+      text-align: center;
+    }
+    /* 振動中の視覚エフェクト */
+    .shaking {
+      animation: shake 0.1s ease-in-out;
+    }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-4px); }
+      75% { transform: translateX(4px); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card" id="card">
+    <h1>カスタム振動テスト</h1>
+
+    <!-- 回数スライダー -->
+    <div class="control-group">
+      <div class="label-row">
+        <span>振動する回数</span>
+        <span class="value-badge"><span id="count-val">5</span> 回</span>
+      </div>
+      <input type="range" id="count-slider" min="1" max="20" value="5">
+    </div>
+
+    <!-- 間隔スライダー -->
+    <div class="control-group">
+      <div class="label-row">
+        <span>振動の間隔（スピード）</span>
+        <span class="value-badge"><span id="interval-val">150</span> ミリ秒</span>
+      </div>
+      <input type="range" id="interval-slider" min="50" max="1000" step="10" value="150">
+    </div>
+
+    <!-- 実行ボタン -->
+    <button class="btn btn-primary" id="play-btn">設定した内容で振動させる</button>
+    <button class="btn btn-tiktok" id="tiktok-btn">TikTok招待風（5回連続）を試す</button>
+    <button class="btn btn-stop" id="stop-btn">強制ストップ</button>
+
+    <div id="status">判定中...</div>
+  </div>
+
+  <!-- iPhone用の隠しスイッチ -->
+  <input type="checkbox" id="ios-haptic-switch" switch style="position: fixed; top: -9999px; opacity: 0;">
+  <label for="ios-haptic-switch" id="ios-haptic-label" style="display: none;"></label>
+
+  <script>
+    const hapticLabel = document.getElementById('ios-haptic-label');
+    const card = document.getElementById('card');
+    const statusEl = document.getElementById('status');
+    const countSlider = document.getElementById('count-slider');
+    const intervalSlider = document.getElementById('interval-slider');
+    const countVal = document.getElementById('count-val');
+    const intervalVal = document.getElementById('interval-val');
+
+    const supportsVibrate = 'vibrate' in navigator;
+    let activeTimers = [];
+
+    // 端末判定表示
+    statusEl.textContent = supportsVibrate
+      ? '判定：Android等（標準バイブレーション対応）'
+      : '判定：iPhone等（スイッチ触覚モード）';
+
+    // スライダーの数値表示を更新
+    countSlider.addEventListener('input', () => countVal.textContent = countSlider.value);
+    intervalSlider.addEventListener('input', () => intervalVal.textContent = intervalSlider.value);
+
+    // 進行中の振動をすべて止める関数
+    function stopAll() {
+      activeTimers.forEach(id => clearTimeout(id));
+      activeTimers = [];
+      if (supportsVibrate) navigator.vibrate(0);
+    }
+
+    // 1回分の振動＋画面揺れエフェクト
+    function pulse() {
+      if (supportsVibrate) {
+        navigator.vibrate(60); // Androidは60ミリ秒振動
+      } else {
+        hapticLabel.click(); // iPhoneは隠しスイッチ切り替え
+      }
+      // 画面も少し揺らす
+      card.classList.remove('shaking');
+      void card.offsetWidth;
+      card.classList.add('shaking');
+    }
+
+    // 指定した回数・間隔で連続実行する関数
+    function playPattern(count, interval) {
+      stopAll();
+      for (let i = 0; i < count; i++) {
+        const timerId = setTimeout(() => {
+          pulse();
+        }, i * interval);
+        activeTimers.push(timerId);
+      }
+    }
+
+    // カスタム設定で実行
+    document.getElementById('play-btn').addEventListener('click', () => {
+      const count = parseInt(countSlider.value, 10);
+      const interval = parseInt(intervalSlider.value, 10);
+      playPattern(count, interval);
+    });
+
+    // TikTok招待風プリセット（5回・160ミリ秒間隔）
+    document.getElementById('tiktok-btn').addEventListener('click', () => {
+      countSlider.value = 5;
+      intervalSlider.value = 160;
+      countVal.textContent = 5;
+      intervalVal.textContent = 160;
+      playPattern(5, 160);
+    });
+
+    // ストップボタン
+    document.getElementById('stop-btn').addEventListener('click', stopAll);
+  </script>
+
+</body>
+</html>
